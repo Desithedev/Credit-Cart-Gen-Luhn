@@ -6,10 +6,16 @@ import path from 'path';
 import fetch from 'node-fetch';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
-import { isValidBin, generateCard, generateTempMail, checkTempMail, checkIP } from './utils.js';
+import { isValidBin, generateCard, generateTempMail, checkTempMail, checkIP, loadBinDatabase, lookupBinLocal, getBinInfo as lookupBin } from './utils.js';
+import chkCommand from './commands/chk.js';
+import massCommand from './commands/mass.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+// Initializing local BIN database
+const CSV_PATH = path.join(__dirname, '..', 'bin-list-data.csv');
+loadBinDatabase(CSV_PATH);
 
 // Configuración
 // Use BOT_TOKEN from environment only. Do NOT hardcode tokens in source.
@@ -27,13 +33,13 @@ if (DRY_RUN) {
     console.log('Starting in DRY_RUN mode: bot will not connect to Telegram API');
     // Minimal stub that supports used methods in this file
     bot = {
-        use: () => {},
-        command: () => {},
-        hears: () => {},
-        on: () => {},
+        use: () => { },
+        command: () => { },
+        hears: () => { },
+        on: () => { },
         launch: async () => { console.log('DRY_RUN: bot.launch() called'); },
         stop: async () => { console.log('DRY_RUN: bot.stop() called'); },
-        catch: () => {}
+        catch: () => { }
     };
 } else {
     const { Telegraf } = await import('telegraf');
@@ -48,7 +54,7 @@ const processingCommands = new Set(); // Track commands being processed
 const isCommandAllowed = (userId) => {
     const now = Date.now();
     const lastCommandTime = userStates.get(userId);
-    
+
     if (!lastCommandTime || (now - lastCommandTime) >= COOLDOWN_PERIOD) {
         userStates.set(userId, now);
         return true;
@@ -62,23 +68,23 @@ bot.use(async (ctx, next) => {
         const userId = ctx.from.id;
         const messageId = ctx.message.message_id;
         const commandKey = `${userId}_${messageId}_slash`;
-        
+
         // Si el comando ya está siendo procesado, ignorarlo
         if (processingCommands.has(commandKey)) {
             console.log(`Comando con / duplicado ignorado: ${commandKey}`);
             return;
         }
-        
+
         // Si el usuario está en cooldown, ignorar el comando
         if (!isCommandAllowed(userId)) {
             console.log(`Comando con / ignorado por cooldown: ${commandKey}`);
-            await ctx.reply('⚠️ Por favor, espera unos segundos antes de usar otro comando.');
+            await ctx.reply('⚠️ Vui lòng đợi vài giây trước khi sử dụng lệnh khác.');
             return;
         }
-        
+
         // Marcar el comando como en procesamiento
         processingCommands.add(commandKey);
-        
+
         try {
             await next();
         } finally {
@@ -118,49 +124,10 @@ const saveUserData = (userId, data) => {
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
 };
 
-// Función para consultar BIN usando APIs alternativas
-const lookupBin = async (bin) => {
-    try {
-        console.log(`Consultando BIN ${bin} en binlist.net...`);
-        // Primera API: binlist.net
-        const response1 = await fetch(`https://lookup.binlist.net/${bin}`);
-        if (response1.ok) {
-            const data1 = await response1.json();
-            console.log('Respuesta de binlist.net:', data1);
-            return {
-                bank: data1.bank?.name || 'Desconocido',
-                brand: data1.scheme || 'Desconocida',
-                type: data1.type || 'Desconocido',
-                country: data1.country?.name || 'Desconocido',
-                countryCode: data1.country?.alpha2 || '??',
-                level: data1.brand || 'Desconocido'
-            };
-        }
-        console.log(`binlist.net falló con status ${response1.status}`);
+// Función para consultar BIN usando Local DB y APIs alternativas
+// MOVED TO UTILS.JS as getBinInfo
+// const lookupBin = async (bin) => { ... }
 
-        console.log(`Consultando BIN ${bin} en bintable.com...`);
-        // Segunda API: bintable.com
-        const response2 = await fetch(`https://api.bintable.com/v1/${bin}?api_key=19d935a6d3244f3f8bab8f09157e4936`);
-        if (response2.ok) {
-            const data2 = await response2.json();
-            console.log('Respuesta de bintable.com:', data2);
-            return {
-                bank: data2.bank?.name || 'Desconocido',
-                brand: data2.scheme || data2.brand || 'Desconocida',
-                type: data2.type || 'Desconocido',
-                country: data2.country?.name || 'Desconocido',
-                countryCode: data2.country?.code || '??',
-                level: data2.level || 'Desconocido'
-            };
-        }
-        console.log(`bintable.com falló con status ${response2.status}`);
-
-        throw new Error('No se pudo obtener información del BIN');
-    } catch (error) {
-        console.error('Error al consultar BIN:', error);
-        return null;
-    }
-};
 
 // Función para registrar comandos con ambos prefijos
 const registerCommand = (command, handler) => {
@@ -187,7 +154,7 @@ const getCommandArgs = (ctx) => {
 
 // Función para generar mensaje de limpieza
 const generateClearMessage = () => {
-    return '⠀\n'.repeat(100) + '🧹 Chat limpiado';
+    return '⠀\n'.repeat(100) + '🧹 Đã xóa chat';
 };
 
 // Función robusta para parsear el input del comando gen
@@ -236,25 +203,25 @@ const handleDotCommand = async (ctx) => {
 
         case 'gen':
             if (!args) {
-                await ctx.reply('❌ Uso: .gen BIN|MM|YYYY|CVV\nEjemplo: .gen 477349002646|05|2027|123');
+                await ctx.reply('❌ Cách dùng: .gen BIN|MM|YYYY|CVV\nVí dụ: .gen 477349002646|05|2027|123');
                 return true;
             }
             // Usar el nuevo parser
             const { bin, month: fixedMonth, year: fixedYear, cvv: fixedCVV } = parseGenInput(args);
             if (!isValidBin(bin)) {
-                await ctx.reply('❌ BIN inválido. Debe contener solo números, entre 6 y 16 dígitos.');
+                await ctx.reply('❌ BIN không hợp lệ. Chỉ được chứa số, từ 6 đến 16 chữ số.');
                 return true;
             }
             if (fixedMonth && !/^(0[1-9]|1[0-2])$/.test(fixedMonth)) {
-                await ctx.reply('❌ Mes inválido. Debe estar entre 01 y 12.');
+                await ctx.reply('❌ Tháng không hợp lệ. Phải từ 01 đến 12.');
                 return true;
             }
             if (fixedYear && !/^([0-9]{2}|20[2-3][0-9])$/.test(fixedYear)) {
-                await ctx.reply('❌ Año inválido. Debe estar en formato YY o YYYY y ser mayor al año actual.');
+                await ctx.reply('❌ Năm không hợp lệ. Phải ở định dạng YY hoặc YYYY và lớn hơn năm hiện tại.');
                 return true;
             }
             if (fixedCVV && !/^[0-9]{3,4}$/.test(fixedCVV)) {
-                await ctx.reply('❌ CVV inválido. Debe contener 3 o 4 dígitos.');
+                await ctx.reply('❌ CVV không hợp lệ. Phải chứa 3 hoặc 4 chữ số.');
                 return true;
             }
             try {
@@ -265,7 +232,7 @@ const handleDotCommand = async (ctx) => {
                     if (fixedCVV) card.cvv = fixedCVV;
                     return card;
                 });
-                const response = cards.map(card => 
+                const response = cards.map(card =>
                     `${card.number}|${card.month}|${card.year}|${card.cvv}`
                 ).join('\n');
                 // Guardar en historial
@@ -278,37 +245,37 @@ const handleDotCommand = async (ctx) => {
                     timestamp: new Date().toISOString()
                 });
                 saveUserData(userId, userData);
-                await ctx.reply(`🎲 Tarjetas generadas:\n\n${response}`);
+                await ctx.reply(`🎲 Thẻ đã tạo:\n\n${response}`);
             } catch (error) {
                 console.error('Error en comando .gen:', error);
-                await ctx.reply(`❌ Error al generar tarjetas: ${error.message}`);
+                await ctx.reply(`❌ Lỗi khi tạo thẻ: ${error.message}`);
             }
             return true;
 
         case 'bin':
             if (!args) {
-                await ctx.reply('❌ Uso: .bin BIN\nEjemplo: .bin 431940');
+                await ctx.reply('❌ Cách dùng: .bin BIN\nVí dụ: .bin 431940');
                 return true;
             }
             if (!isValidBin(args)) {
-                await ctx.reply('❌ BIN inválido. Debe contener solo números, entre 6 y 16 dígitos.');
+                await ctx.reply('❌ BIN không hợp lệ. Chỉ được chứa số, từ 6 đến 16 chữ số.');
                 return true;
             }
             try {
                 const binInfo = await lookupBin(args);
                 if (!binInfo) {
-                    await ctx.reply('❌ No se encontró información para este BIN');
+                    await ctx.reply('❌ Không tìm thấy thông tin cho BIN này');
                     return true;
                 }
 
                 const response = `
-🔍 Información del BIN: ${args}
+🔍 Thông tin BIN: ${args}
 
-🏦 Banco: ${binInfo.bank}
-💳 Marca: ${binInfo.brand}
-🌍 País: ${binInfo.country} (${binInfo.countryCode})
-📱 Tipo: ${binInfo.type}
-⭐️ Nivel: ${binInfo.level}
+🏦 Ngân hàng: ${binInfo.bank}
+💳 Thương hiệu: ${binInfo.brand}
+🌍 Quốc gia: ${binInfo.country} (${binInfo.countryCode})
+📱 Loại: ${binInfo.type}
+⭐️ Hạng: ${binInfo.level}
                 `;
 
                 // Guardar en historial
@@ -332,113 +299,113 @@ const handleDotCommand = async (ctx) => {
         case 'start':
         case 'ayuda':
         case 'help':
-            const helpText = `👋 ¡Hola! Bienvenido a CARD GEN PRO
+            const helpText = `👋 Xin chào! Chào mừng đến với CARD GEN PRO
 
-Todos los comandos funcionan con / o . (por ejemplo, /gen o .gen)
+Tất cả lệnh hoạt động với / hoặc . (ví dụ: /gen hoặc .gen)
 
-🔧 Generación de Tarjetas
+🔧 Tạo Thẻ
 gen BIN|MM|YYYY|CVV  
-► Genera 10 tarjetas automáticamente  
-Ejemplo: gen 477349002646|05|2027|123
+► Tự động tạo 10 thẻ  
+Ví dụ: gen 477349002646|05|2027|123
 
-🔍 Consultas Inteligentes
+🔍 Tra cứu Thông minh
 bin BIN  
-► Información detallada de un BIN  
-Ejemplo: bin 431940
+► Thông tin chi tiết về BIN  
+Ví dụ: bin 431940
 
-ip <dirección IP>  
-► Consulta información y riesgo de una IP  
-Ejemplo: ip 8.8.8.8
+ip <địa chỉ IP>  
+► Tra cứu thông tin và rủi ro của IP  
+Ví dụ: ip 8.8.8.8
 
-cedula <número de cédula>  
-► Consulta datos SRI por cédula  
-Ejemplo: cedula 17xxxxxxxx
+cedula <số CCCD>  
+► Tra cứu dữ liệu SRI qua CCCD  
+Ví dụ: cedula 17xxxxxxxx
 
-placa <número de placa>
-► Consulta datos de vehículo por placa
-Ejemplo: placa PDF9627
+placa <biển số>
+► Tra cứu dữ liệu xe qua biển số
+Ví dụ: placa PDF9627
 
-⭐️ Favoritos
+⭐️ Yêu thích
 favoritos  
-► Lista tus BINs guardados
+► Danh sách BIN đã lưu
 
-agregarbin BIN [mes] [año] [cvv]  
-► Guarda un BIN para usarlo luego
+agregarbin BIN [tháng] [năm] [cvv]  
+► Lưu BIN để dùng sau
 
-eliminarbin <índice>  
-► Elimina un BIN de tu lista
+eliminarbin <chỉ số>  
+► Xóa BIN khỏi danh sách
 
-📋 Utilidades
+📋 Tiện ích
 historial  
-► Revisa tus consultas anteriores
+► Xem lại lịch sử tra cứu
 
 clear  
-► Limpia el chat
+► Xóa chat
 
 ayuda  
-► Muestra esta guía de comandos
+► Hiển thị hướng dẫn này
 
-🌐 Prueba también la versión web  
+🌐 Thử phiên bản web  
 https://credit-cart-gen-luhn.vercel.app/index.html
 
-Desarrollado con ❤️ por @mat1520`;
+Phát triển với ❤️ bởi @mat1520`;
             await ctx.reply(helpText);
             return true;
 
         case 'favoritos':
             const userDataFav = loadUserData(ctx.from.id);
             if (userDataFav.favorites.length === 0) {
-                await ctx.reply('📌 No tienes BINs favoritos guardados');
+                await ctx.reply('📌 Bạn chưa lưu BIN yêu thích nào');
                 return true;
             }
-            const responseFav = userDataFav.favorites.map((fav, index) => 
+            const responseFav = userDataFav.favorites.map((fav, index) =>
                 `${index + 1}. ${fav.bin} (${fav.month || 'MM'}/${fav.year || 'YY'})`
             ).join('\n');
-            await ctx.reply(`📌 Tus BINs favoritos:\n\n${responseFav}`);
+            await ctx.reply(`📌 BIN yêu thích của bạn:\n\n${responseFav}`);
             return true;
 
         case 'historial':
             const userDataHist = loadUserData(ctx.from.id);
             if (userDataHist.history.length === 0) {
-                await ctx.reply('📝 No hay historial de consultas');
+                await ctx.reply('📝 Không có lịch sử tra cứu');
                 return true;
             }
             const responseHist = userDataHist.history.slice(0, 10).map((item, index) => {
                 const date = new Date(item.timestamp).toLocaleString();
                 if (item.type === 'gen') {
-                    return `${index + 1}. Generación: ${item.bin} (${item.count} tarjetas) - ${date}`;
+                    return `${index + 1}. Tạo: ${item.bin} (${item.count} thẻ) - ${date}`;
                 } else {
-                    return `${index + 1}. Consulta: ${item.bin} - ${date}`;
+                    return `${index + 1}. Tra cứu: ${item.bin} - ${date}`;
                 }
             }).join('\n');
-            await ctx.reply(`📝 Historial reciente:\n\n${responseHist}`);
+            await ctx.reply(`📝 Lịch sử gần đây:\n\n${responseHist}`);
             return true;
 
         case 'agregarbin':
             if (!args) {
-                await ctx.reply('❌ Uso: .agregarbin BIN mes? año? cvv?');
+                await ctx.reply('❌ Cách dùng: .agregarbin BIN [tháng] [năm] [cvv]');
                 return true;
             }
             // Usar el parser flexible
             const parsedAdd = parseGenInput(args);
             if (!isValidBin(parsedAdd.bin)) {
-                await ctx.reply('❌ BIN inválido. Debe contener solo números, entre 6 y 16 dígitos.');
+                await ctx.reply('❌ BIN không hợp lệ. Chỉ được chứa số, từ 6 đến 16 chữ số.');
                 return true;
             }
             const userIdAdd = ctx.from.id;
             const userDataAdd = loadUserData(userIdAdd);
             if (userDataAdd.favorites.some(fav => fav.bin === parsedAdd.bin)) {
-                await ctx.reply('❌ Este BIN ya está en tus favoritos');
+                await ctx.reply('❌ BIN này đã có trong danh sách yêu thích');
                 return true;
             }
             userDataAdd.favorites.push({ bin: parsedAdd.bin, month: parsedAdd.month, year: parsedAdd.year, cvv: parsedAdd.cvv });
             saveUserData(userIdAdd, userDataAdd);
-            await ctx.reply('✅ BIN agregado a favoritos');
+            await ctx.reply('✅ Đã thêm BIN vào yêu thích');
             return true;
 
         case 'eliminarbin':
             if (!args) {
-                await ctx.reply('❌ Uso: .eliminarbin índice o BIN');
+                await ctx.reply('❌ Cách dùng: .eliminarbin <chỉ số> hoặc BIN');
                 return true;
             }
             const userIdDel = ctx.from.id;
@@ -447,24 +414,24 @@ Desarrollado con ❤️ por @mat1520`;
             if (/^\d+$/.test(args)) {
                 const index = parseInt(args) - 1;
                 if (isNaN(index) || index < 0 || index >= userDataDel.favorites.length) {
-                    await ctx.reply('❌ Índice inválido');
+                    await ctx.reply('❌ Chỉ số không hợp lệ');
                     return true;
                 }
                 const removedBin = userDataDel.favorites.splice(index, 1)[0];
                 saveUserData(userIdDel, userDataDel);
-                await ctx.reply(`✅ BIN ${removedBin.bin} eliminado de favoritos`);
+                await ctx.reply(`✅ Đã xóa BIN ${removedBin.bin} khỏi yêu thích`);
                 return true;
             }
             // Si es BIN flexible, usar el parser
             const parsedDel = parseGenInput(args);
             const favIndex = userDataDel.favorites.findIndex(fav => fav.bin === parsedDel.bin);
             if (favIndex === -1) {
-                await ctx.reply('❌ No se encontró ese BIN en tus favoritos');
+                await ctx.reply('❌ Không tìm thấy BIN này trong danh sách yêu thích');
                 return true;
             }
             const removedBin = userDataDel.favorites.splice(favIndex, 1)[0];
             saveUserData(userIdDel, userDataDel);
-            await ctx.reply(`✅ BIN ${removedBin.bin} eliminado de favoritos`);
+            await ctx.reply(`✅ Đã xóa BIN ${removedBin.bin} khỏi yêu thích`);
             return true;
 
         case 'mail':
@@ -489,14 +456,14 @@ bot.on('text', async (ctx, next) => {
             const userId = ctx.from.id;
             const messageId = ctx.message.message_id;
             const commandKey = `${userId}_${messageId}_dot`;
-            
+
             // Si el usuario está en cooldown, ignorar el comando
             if (!isCommandAllowed(userId)) {
                 console.log(`Comando con . ignorado por cooldown: ${commandKey}`);
-                await ctx.reply('⚠️ Por favor, espera unos segundos antes de usar otro comando.');
+                await ctx.reply('⚠️ Vui lòng đợi vài giây trước khi sử dụng lệnh khác.');
                 return;
             }
-            
+
             console.log(`Procesando comando con punto: ${ctx.message.text}`);
             const handled = await handleDotCommand(ctx);
             if (!handled) {
@@ -513,41 +480,45 @@ bot.on('text', async (ctx, next) => {
 // URL RAW de la imagen oficial OFFICIALT.png en GitHub
 const HACKER_IMG_URL = 'https://raw.githubusercontent.com/mat1520/Credit-Cart-Gen-Luhn/main/telegram-bot/OFFICIALT.png';
 
-const toolsBlock = `🛠 Herramientas disponibles:
+const toolsBlock = `🛠 Công cụ khả dụng:
 
-Generación y Consultas:
-• /gen BIN|MM|YYYY|CVV - Genera tarjetas 💳
-• /bin BIN - Consulta BIN 🔍
-• /ip <IP> - Consulta IP y riesgo 🌐
-• /cedula <número> - Consulta SRI por cédula 🪪
-• /placa <número> - Consulta datos de vehículo 🚗
+Tạo và Tra cứu:
+• /gen BIN|MM|YYYY|CVV - Tạo thẻ 💳
+• /bin BIN - Tra cứu BIN 🔍
+• /ip <IP> - Tra cứu IP và rủi ro 🌐
+• /cedula <số> - Tra cứu SRI qua CCCD 🪪
+• /placa <số> - Tra cứu dữ liệu xe 🚗
 
-Correo Temporal:
-• /mail - Genera correo temporal 📧
-• /check - Verifica mensajes del correo 📨
+Email Tạm thời:
+• /mail - Tạo email tạm thời 📧
+• /check - Kiểm tra tin nhắn email 📨
 
-Favoritos:
-• /favoritos - Tus BINs favoritos ⭐️
-• /agregarbin BIN mes año cvv - Agrega BIN a favoritos ➕
-• /eliminarbin <índice> - Elimina BIN de favoritos 🗑
+Yêu thích:
+• /favoritos - BIN yêu thích của bạn ⭐️
+• /agregarbin BIN tháng năm cvv - Thêm BIN vào yêu thích ➕
+• /eliminarbin <chỉ số> - Xóa BIN khỏi yêu thích 🗑
 
-Utilidades:
-• /historial - Tu historial 📝
-• /clear - Limpiar chat 🧹
+Kiểm tra:
+• /chk cc|mm|yy|cvv - Kiểm tra thẻ (Recurly) 💳
+• /mass list - Kiểm tra hàng loạt (Paypal) 💳
 
-Todos los comandos funcionan con / o .`;
+Tiện ích:
+• /historial - Lịch sử của bạn 📝
+• /clear - Xóa chat 🧹
+
+Tất cả lệnh hoạt động với / hoặc .`;
 
 // Comandos del bot
 registerCommand('start', async (ctx) => {
-    const warning = '⚡️ <b>¡ADVERTENCIA!</b> Esto no es un simulacro';
-    const desc = '<i>Este bot es solo para fines educativos y de pruebas en ciberseguridad. Bienvenido al laboratorio virtual de tarjetas y OSINT. Solo para hackers éticos, pentesters y mentes curiosas. El uso indebido de la información generada puede tener consecuencias legales. ¡Explora bajo tu propio riesgo! 👾</i>';
+    const warning = '⚡️ <b>CẢNH BÁO!</b> Đây không phải là diễn tập';
+    const desc = '<i>Bot này chỉ dành cho mục đích giáo dục và thử nghiệm an ninh mạng. Chào mừng đến với phòng thí nghiệm ảo về thẻ và OSINT. Chỉ dành cho hacker mũ trắng, pentester và những người tò mò. Việc sử dụng sai thông tin được tạo ra có thể dẫn đến hậu quả pháp lý. Hãy khám phá và tự chịu rủi ro! 👾</i>';
     const welcome = '<b>CardGen Pro BOT</b>\n';
     await ctx.replyWithPhoto(HACKER_IMG_URL, {
         caption: `${warning}\n\n${welcome}\n${desc}`,
         parse_mode: 'HTML'
     });
     await ctx.reply(toolsBlock);
-    await ctx.reply('Selecciona una opción del menú:', {
+    await ctx.reply('Chọn một tùy chọn từ menu:', {
         reply_markup: {
             keyboard: [
                 ['🛠 Tools', '👤 Creator'],
@@ -564,10 +535,10 @@ bot.hears('🛠 Tools', (ctx) => {
     ctx.reply(toolsBlock);
 });
 bot.hears('👤 Creator', (ctx) => {
-    ctx.reply('👤 Creador: @MAT3810\nhttps://t.me/MAT3810');
+    ctx.reply('👤 Người tạo: @MAT3810\nhttps://t.me/MAT3810');
 });
 bot.hears('💸 Donate', (ctx) => {
-    ctx.reply('💸 Puedes apoyar el proyecto aquí:\nhttps://paypal.me/ArielMelo200?country.x=EC&locale.x=es_XC');
+    ctx.reply('💸 Bạn có thể ủng hộ dự án tại đây:\nhttps://paypal.me/ArielMelo200?country.x=EC&locale.x=es_XC');
 });
 bot.hears('🐙 GitHub', (ctx) => {
     ctx.reply('🐙 GitHub: https://github.com/mat1520');
@@ -589,22 +560,22 @@ registerCommand('gen', async (ctx) => {
         console.log('Input completo:', ctx.message.text);
         console.log('Input procesado:', input);
         if (!input) {
-            return ctx.reply('❌ Uso: /gen o .gen BIN|MM|YYYY|CVV\nEjemplo: /gen 477349002646|05|2027|123');
+            return ctx.reply('❌ Cách dùng: /gen hoặc .gen BIN|MM|YYYY|CVV\nVí dụ: /gen 477349002646|05|2027|123');
         }
         // Usar el nuevo parser
         const { bin, month: fixedMonth, year: fixedYear, cvv: fixedCVV } = parseGenInput(input);
         console.log('Parseado:', { bin, fixedMonth, fixedYear, fixedCVV });
         if (!isValidBin(bin)) {
-            return ctx.reply('❌ BIN inválido. Debe contener solo números, entre 6 y 16 dígitos.');
+            return ctx.reply('❌ BIN không hợp lệ. Chỉ được chứa số, từ 6 đến 16 chữ số.');
         }
         if (fixedMonth && !/^(0[1-9]|1[0-2])$/.test(fixedMonth)) {
-            return ctx.reply('❌ Mes inválido. Debe estar entre 01 y 12.');
+            return ctx.reply('❌ Tháng không hợp lệ. Phải từ 01 đến 12.');
         }
         if (fixedYear && !/^([0-9]{2}|20[2-3][0-9])$/.test(fixedYear)) {
-            return ctx.reply('❌ Año inválido. Debe estar en formato YY o YYYY y ser mayor al año actual.');
+            return ctx.reply('❌ Năm không hợp lệ. Phải ở định dạng YY hoặc YYYY và lớn hơn năm hiện tại.');
         }
         if (fixedCVV && !/^[0-9]{3,4}$/.test(fixedCVV)) {
-            return ctx.reply('❌ CVV inválido. Debe contener 3 o 4 dígitos.');
+            return ctx.reply('❌ CVV không hợp lệ. Phải chứa 3 hoặc 4 chữ số.');
         }
         const cards = Array(10).fill().map(() => {
             const card = generateCard(bin);
@@ -613,20 +584,26 @@ registerCommand('gen', async (ctx) => {
             if (fixedCVV) card.cvv = fixedCVV;
             return card;
         });
-        let binInfo = await lookupBin(bin.slice(0, 6));
+        let binInfo = {};
+        try {
+            console.log('Fetching BIN info...');
+            binInfo = await lookupBin(bin.slice(0, 6));
+            console.log('Got BIN info:', binInfo);
+        } catch (e) { console.error('BIN lookup error:', e); }
+
         if (!binInfo) binInfo = {};
-        const bank = binInfo.bank || 'No disponible';
-        const brand = binInfo.brand || 'No disponible';
-        const country = binInfo.country || 'No disponible';
+        const bank = binInfo.bank || 'Không có';
+        const brand = binInfo.brand || 'Không có';
+        const country = binInfo.country || 'Không có';
         const countryCode = binInfo.countryCode || '';
-        const type = binInfo.type || 'No disponible';
-        const level = binInfo.level || 'No disponible';
+        const type = binInfo.type || 'Không có';
+        const level = binInfo.level || 'Không có';
         const flag = countryCode ? String.fromCodePoint(...[...countryCode.toUpperCase()].map(c => 127397 + c.charCodeAt(0))) : '';
         const userName = ctx.from.first_name || 'Usuario';
         const header = `\n𝘽𝙞𝙣 -» ${bin}xxxx|${fixedMonth || 'xx'}|${fixedYear ? fixedYear.slice(-2) : 'xx'}|${fixedCVV || 'rnd'}\n─━─━─━─━─━─━─━─━─━─━─━─━─`;
         const tarjetas = cards.map(card => `${card.number}|${card.month}|${card.year}|${card.cvv}`).join('\n');
         const cardBlock = tarjetas;
-                const binInfoFormatted = `\n─━─━─━─━─━─━─━─━─━─━─━─━─\n• 𝙄𝙣𝙛𝙤 -» ${brand} - ${type} - ${level}\n• 𝘽𝙖𝙣𝙠 -» ${bank}\n• 𝘾𝙤𝙪𝙣𝙩𝙧𝙮 -» ${country} ${flag}\n─━─━─━─━─━─━─━─━─━─━─━─━─\n• 𝙂𝙚𝙣 𝙗𝙮 -» ${userName} -» @CardGen_Pro_BOT`;
+        const binInfoFormatted = `\n─━─━─━─━─━─━─━─━─━─━─━─━─\n• 𝙄𝙣𝙛𝙤 -» ${brand} - ${type} - ${level}\n• 𝙉𝙜𝙖𝙣 𝙝𝙖𝙣𝙜 -» ${bank}\n• 𝙌𝙪𝙤𝙘 𝙜𝙞𝙖 -» ${country} ${flag}\n─━─━─━─━─━─━─━─━─━─━─━─━─\n• 𝙏𝙖𝙤 𝙗𝙤𝙞 -» ${userName} -» @CardGen_Pro_BOT`;
         const response = `${header}\n${cardBlock}\n${binInfoFormatted}`;
         const userId = ctx.from.id;
         const userData = loadUserData(userId);
@@ -637,10 +614,12 @@ registerCommand('gen', async (ctx) => {
             timestamp: new Date().toISOString()
         });
         saveUserData(userId, userData);
-        await ctx.reply(response);
+        console.log('Sending response to user...');
+        await ctx.reply(response).catch(err => console.error('FAILED TO REPLY:', err));
+        console.log('Response sent.');
     } catch (error) {
         console.error(`Error en comando gen, messageId: ${messageId}:`, error);
-        await ctx.reply(`❌ Error al generar tarjetas: ${error.message}`);
+        await ctx.reply(`❌ Lỗi khi tạo thẻ: ${error.message}`);
     }
 });
 
@@ -649,28 +628,28 @@ registerCommand('bin', async (ctx) => {
         const bin = getCommandArgs(ctx);
         console.log('Input completo:', ctx.message.text);
         console.log('BIN procesado:', bin);
-        
+
         if (!bin) {
-            return ctx.reply('❌ Uso: /bin o .bin BIN\nEjemplo: /bin 431940');
+            return ctx.reply('❌ Cách dùng: /bin hoặc .bin BIN\nVí dụ: /bin 431940');
         }
 
         if (!isValidBin(bin)) {
-            return ctx.reply('❌ BIN inválido. Debe contener solo números, entre 6 y 16 dígitos.');
+            return ctx.reply('❌ BIN không hợp lệ. Chỉ được chứa số, từ 6 đến 16 chữ số.');
         }
 
         const binInfo = await lookupBin(bin);
         if (!binInfo) {
-            return ctx.reply('❌ No se encontró información para este BIN');
+            return ctx.reply('❌ Không tìm thấy thông tin cho BIN này');
         }
 
         const response = `
-🔍 Información del BIN: ${bin}
+🔍 Thông tin BIN: ${bin}
 
-🏦 Banco: ${binInfo.bank}
-💳 Marca: ${binInfo.brand}
-🌍 País: ${binInfo.country} (${binInfo.countryCode})
-📱 Tipo: ${binInfo.type}
-⭐️ Nivel: ${binInfo.level}
+🏦 Ngân hàng: ${binInfo.bank}
+💳 Thương hiệu: ${binInfo.brand}
+🌍 Quốc gia: ${binInfo.country} (${binInfo.countryCode})
+📱 Loại: ${binInfo.type}
+⭐️ Hạng: ${binInfo.level}
         `;
 
         // Guardar en historial
@@ -694,22 +673,22 @@ registerCommand('bin', async (ctx) => {
 registerCommand('favoritos', (ctx) => {
     const userId = ctx.from.id;
     const userData = loadUserData(userId);
-    
+
     if (userData.favorites.length === 0) {
-        return ctx.reply('📌 No tienes BINs favoritos guardados');
+        return ctx.reply('📌 Bạn chưa lưu BIN yêu thích nào');
     }
 
-    const response = userData.favorites.map((fav, index) => 
+    const response = userData.favorites.map((fav, index) =>
         `${index + 1}. ${fav.bin} (${fav.month || 'MM'}/${fav.year || 'YY'})`
     ).join('\n');
 
-    ctx.reply(`📌 Tus BINs favoritos:\n\n${response}`);
+    ctx.reply(`📌 BIN yêu thích của bạn:\n\n${response}`);
 });
 
 registerCommand('historial', (ctx) => {
     const userId = ctx.from.id;
     const userData = loadUserData(userId);
-    
+
     if (userData.history.length === 0) {
         return ctx.reply('📝 No hay historial de consultas');
     }
@@ -723,7 +702,7 @@ registerCommand('historial', (ctx) => {
         }
     }).join('\n');
 
-    ctx.reply(`📝 Historial reciente:\n\n${response}`);
+    ctx.reply(`📝 Lịch sử gần đây:\n\n${response}`);
 });
 
 registerCommand('clear', async (ctx) => {
@@ -734,10 +713,24 @@ registerCommand('limpiar', async (ctx) => {
     await ctx.reply(generateClearMessage());
 });
 
+registerCommand('ping', async (ctx) => {
+    await ctx.reply('🏓 Pong! Bot is active.');
+});
+
+console.log('Registering chk and mass commands...');
+registerCommand('chk', async (ctx) => {
+    console.log('Command /chk triggered');
+    await chkCommand(ctx);
+});
+registerCommand('mass', async (ctx) => {
+    console.log('Command /mass triggered');
+    await massCommand(ctx);
+});
+
 registerCommand('cedula', async (ctx) => {
     const cedula = getCommandArgs(ctx).trim();
     if (!cedula || !/^[0-9]{10}$/.test(cedula)) {
-        return ctx.reply('❌ Uso: /cedula <número de cédula>\nEjemplo: /cedula 17xxxxxxxx');
+        return ctx.reply('❌ Cách dùng: /cedula <số CCCD>\nVí dụ: /cedula 17xxxxxxxx');
     }
     try {
         // Mejor manejo: timeout, retries, y mensajes según status
@@ -782,14 +775,14 @@ registerCommand('cedula', async (ctx) => {
 
         // Manejar códigos HTTP comunes
         if (resp.status === 404) {
-            return ctx.reply(`❌ No se encontró información para la cédula ${cedula}.`);
+            return ctx.reply(`❌ Không tìm thấy thông tin cho số CCCD ${cedula}.`);
         }
         if (resp.status === 429) {
-            return ctx.reply('⚠️ Servicio temporalmente sobrecargado. Intenta de nuevo en unos segundos.');
+            return ctx.reply('⚠️ Dịch vụ tạm thời quá tải. Vui lòng thử lại sau vài giây.');
         }
         if (resp.status >= 400) {
             console.error('SRI responded with status', resp.status);
-            return ctx.reply('❌ Error al consultar la cédula. Intenta más tarde.');
+            return ctx.reply('❌ Lỗi khi tra cứu CCCD. Vui lòng thử lại sau.');
         }
 
         // Parsear JSON de forma segura
@@ -802,14 +795,14 @@ registerCommand('cedula', async (ctx) => {
 
         if (data && data.contribuyente) {
             const info = data.contribuyente;
-            let msg = `🪪 Información SRI para la cédula: <code>${cedula}</code>\n\n`;
-            msg += `• <b>Nombre Comercial:</b> ${info.nombreComercial || info.denominacion || 'No disponible'}\n`;
-            msg += `• <b>Clase:</b> ${info.clase || 'No disponible'}\n`;
-            msg += `• <b>Tipo de Identificación:</b> ${info.tipoIdentificacion || 'No disponible'}\n`;
+            let msg = `🪪 Thông tin SRI cho CCCD: <code>${cedula}</code>\n\n`;
+            msg += `• <b>Tên thương mại:</b> ${info.nombreComercial || info.denominacion || 'Không có'}\n`;
+            msg += `• <b>Loại:</b> ${info.clase || 'Không có'}\n`;
+            msg += `• <b>Loại giấy tờ:</b> ${info.tipoIdentificacion || 'Không có'}\n`;
             if (info.fechaInformacion) {
                 try {
                     const date = new Date(Number(info.fechaInformacion));
-                    if (!isNaN(date)) msg += `• <b>Fecha de Información:</b> ${date.toLocaleString()}\n`;
+                    if (!isNaN(date)) msg += `• <b>Ngày cập nhật:</b> ${date.toLocaleString()}\n`;
                 } catch (e) { /* ignore */ }
             }
             if (data.deuda) {
@@ -819,7 +812,7 @@ registerCommand('cedula', async (ctx) => {
             }
             await ctx.replyWithHTML(msg);
         } else {
-            await ctx.reply('❌ No se encontró información para la cédula proporcionada.');
+            await ctx.reply('❌ Không tìm thấy thông tin cho danh tính được cung cấp.');
         }
     } catch (error) {
         console.error('Error en comando /cedula:', error);
@@ -879,33 +872,33 @@ function handleTelegramCommand(command, placa) {
 registerCommand('placa', async (ctx) => {
     const placa = getCommandArgs(ctx).toUpperCase(); // Convertir a mayúsculas
     if (!placa) {
-        await ctx.reply('❌ Uso: .placa PLACA\nEjemplo: .placa PDF9627');
+        await ctx.reply('❌ Cách dùng: .placa BIEN_SO\nVí dụ: .placa PDF9627');
         return;
     }
 
     try {
         const data = await consultarPlaca(placa);
         const mensaje = `
-🚗 Información del vehículo: ${placa}
+🚗 Thông tin xe: ${placa}
 
-📝 Marca: ${data.marca}
-🚙 Modelo: ${data.modelo}
-📅 Año: ${data.anioModelo}
-🔧 Cilindraje: ${data.cilindraje}
-🏭 País: ${data.paisFabricacion}
-🚦 Clase: ${data.clase}
-🔑 Servicio: ${data.servicio}
-💰 Total a pagar: $${data.total}
+📝 Hãng: ${data.marca}
+🚙 Mẫu: ${data.modelo}
+📅 Năm: ${data.anioModelo}
+🔧 Dung tích: ${data.cilindraje}
+🏭 Xuất xứ: ${data.paisFabricacion}
+🚦 Loại: ${data.clase}
+🔑 Dịch vụ: ${data.servicio}
+💰 Tổng thanh toán: $${data.total}
 
-📍 Cantón: ${data.cantonMatricula}
-📆 Última matrícula: ${new Date(data.fechaUltimaMatricula).toLocaleDateString()}
-⏳ Caducidad: ${new Date(data.fechaCaducidadMatricula).toLocaleDateString()}
-🔄 Estado: ${data.estadoAuto}
+📍 Nơi đăng ký: ${data.cantonMatricula}
+📆 Đăng ký lần cuối: ${new Date(data.fechaUltimaMatricula).toLocaleDateString()}
+⏳ Hết hạn: ${new Date(data.fechaCaducidadMatricula).toLocaleDateString()}
+🔄 Trạng thái: ${data.estadoAuto}
 `;
         await ctx.reply(mensaje);
     } catch (error) {
         console.error('Error al consultar la placa:', error);
-        await ctx.reply('❌ Error al consultar la placa. Por favor, verifica que la placa sea correcta.');
+        await ctx.reply('❌ Lỗi khi tra cứu biển số. Vui lòng kiểm tra lại biển số.');
     }
 });
 
@@ -914,28 +907,28 @@ const handleMailCommand = async (ctx) => {
     try {
         const userId = ctx.from.id;
         const userData = loadUserData(userId);
-        
+
         // Enviar mensaje de espera
-        const waitMsg = await ctx.reply('⏳ Generando correo temporal...');
-        
+        const waitMsg = await ctx.reply('⏳ Đang tạo email ảo...');
+
         try {
             // Generar nuevo correo temporal
             const { email, token, password } = await generateTempMail();
-            
+
             // Guardar el token y la contraseña en los datos del usuario
             userData.tempMail = { email, token, password };
             saveUserData(userId, userData);
-            
+
             // Actualizar mensaje de espera con el correo generado
             await ctx.telegram.editMessageText(
                 ctx.chat.id,
                 waitMsg.message_id,
                 null,
-                `📧 *Correo Temporal Generado*\n\n` +
-                `📨 *Correo:* \`${email}\`\n` +
-                `🔑 *Contraseña:* \`${password}\`\n\n` +
-                `⚠️ Este correo es temporal y se eliminará automáticamente.\n` +
-                `📝 Usa \`.check\` para verificar si hay nuevos mensajes.`,
+                `📧 *Email Ảo Đã Tạo*\n\n` +
+                `📨 *Email:* \`${email}\`\n` +
+                `🔑 *Mật khẩu:* \`${password}\`\n\n` +
+                `⚠️ Email này là tạm thời và sẽ tự động bị xóa.\n` +
+                `📝 Dùng \`.check\` để kiểm tra tin nhắn mới.`,
                 { parse_mode: 'Markdown' }
             );
         } catch (error) {
@@ -945,12 +938,12 @@ const handleMailCommand = async (ctx) => {
                 ctx.chat.id,
                 waitMsg.message_id,
                 null,
-                `❌ Error al generar el correo temporal: ${error.message}\nPor favor, intenta de nuevo.`
+                `❌ Lỗi khi tạo email ảo: ${error.message}\nVui lòng thử lại.`
             );
         }
     } catch (error) {
         console.error('Error general en comando mail:', error);
-        await ctx.reply('❌ Error al generar el correo temporal. Por favor, intenta de nuevo.');
+        await ctx.reply('❌ Lỗi khi tạo email ảo. Vui lòng thử lại.');
     }
 };
 
@@ -959,46 +952,46 @@ const handleCheckCommand = async (ctx) => {
     try {
         const userId = ctx.from.id;
         const userData = loadUserData(userId);
-        
+
         if (!userData.tempMail) {
-            await ctx.reply('❌ No tienes un correo temporal activo. Usa \`.mail\` para generar uno.');
+            await ctx.reply('❌ Bạn không có email ảo nào đang hoạt động. Dùng \`.mail\` để tạo.');
             return;
         }
 
         // Enviar mensaje de espera
-        const waitMsg = await ctx.reply('⏳ Verificando mensajes...');
-        
+        const waitMsg = await ctx.reply('⏳ Đang kiểm tra tin nhắn...');
+
         try {
             const messages = await checkTempMail(userData.tempMail.token);
-            
+
             if (!messages || messages.length === 0) {
                 await ctx.telegram.editMessageText(
                     ctx.chat.id,
                     waitMsg.message_id,
                     null,
-                    `📭 No hay mensajes nuevos en el correo: ${userData.tempMail.email}`
+                    `📭 Không có tin nhắn mới trong email: ${userData.tempMail.email}`
                 );
                 return;
             }
-            
+
             // Actualizar mensaje de espera
             await ctx.telegram.editMessageText(
                 ctx.chat.id,
                 waitMsg.message_id,
                 null,
-                `📨 Se encontraron ${messages.length} mensajes en ${userData.tempMail.email}`
+                `📨 Tìm thấy ${messages.length} tin nhắn trong ${userData.tempMail.email}`
             );
-            
+
             // Mostrar los mensajes
             for (const msg of messages) {
                 try {
-                    let messageText = `📨 *Nuevo mensaje recibido*\n\n`;
-                    messageText += `*De:* ${msg.from?.address || 'Desconocido'}\n`;
-                    messageText += `*Para:* ${msg.to?.[0]?.address || userData.tempMail.email}\n`;
-                    messageText += `*Asunto:* ${msg.subject || 'Sin asunto'}\n`;
-                    messageText += `*Fecha:* ${new Date(msg.createdAt).toLocaleString()}\n\n`;
-                    
-                    let content = msg.text || msg.html || 'Sin contenido';
+                    let messageText = `📨 *Tin nhắn mới*\n\n`;
+                    messageText += `*Từ:* ${msg.from?.address || 'Không xác định'}\n`;
+                    messageText += `*Đến:* ${msg.to?.[0]?.address || userData.tempMail.email}\n`;
+                    messageText += `*Chủ đề:* ${msg.subject || 'Không có chủ đề'}\n`;
+                    messageText += `*Ngày:* ${new Date(msg.createdAt).toLocaleString()}\n\n`;
+
+                    let content = msg.text || msg.html || 'Không có nội dung';
                     if (msg.html) {
                         content = content
                             .replace(/<[^>]*>/g, '')
@@ -1009,16 +1002,16 @@ const handleCheckCommand = async (ctx) => {
                             .replace(/&quot;/g, '"')
                             .replace(/&#39;/g, "'");
                     }
-                    
+
                     if (content.length > 1000) {
-                        content = content.substring(0, 1000) + '...\n(contenido truncado)';
+                        content = content.substring(0, 1000) + '...\n(nội dung bị cắt)';
                     }
-                    
-                    messageText += `*Contenido:*\n${content}\n`;
-                    
-                    await ctx.reply(messageText, { 
+
+                    messageText += `*Nội dung:*\n${content}\n`;
+
+                    await ctx.reply(messageText, {
                         parse_mode: 'Markdown',
-                        disable_web_page_preview: true 
+                        disable_web_page_preview: true
                     });
                 } catch (msgError) {
                     console.error('Error al procesar mensaje individual:', msgError);
@@ -1027,7 +1020,7 @@ const handleCheckCommand = async (ctx) => {
             }
         } catch (error) {
             console.error('Error al verificar mensajes:', error);
-            
+
             if (error.message === 'Token inválido o expirado') {
                 try {
                     // Intentar renovar el token
@@ -1052,7 +1045,7 @@ const handleCheckCommand = async (ctx) => {
 
                     // Intentar verificar mensajes nuevamente
                     const messages = await checkTempMail(tokenData.token);
-                    
+
                     if (!messages || messages.length === 0) {
                         await ctx.telegram.editMessageText(
                             ctx.chat.id,
@@ -1068,18 +1061,18 @@ const handleCheckCommand = async (ctx) => {
                         ctx.chat.id,
                         waitMsg.message_id,
                         null,
-                        `📨 Se encontraron ${messages.length} mensajes en ${userData.tempMail.email}`
+                        `📨 Tìm thấy ${messages.length} tin nhắn tại ${userData.tempMail.email}`
                     );
 
                     for (const msg of messages) {
                         try {
-                            let messageText = `📨 *Nuevo mensaje recibido*\n\n`;
-                            messageText += `*De:* ${msg.from?.address || 'Desconocido'}\n`;
-                            messageText += `*Para:* ${msg.to?.[0]?.address || userData.tempMail.email}\n`;
-                            messageText += `*Asunto:* ${msg.subject || 'Sin asunto'}\n`;
-                            messageText += `*Fecha:* ${new Date(msg.createdAt).toLocaleString()}\n\n`;
-                            
-                            let content = msg.text || msg.html || 'Sin contenido';
+                            let messageText = `📨 *Tin nhắn mới*\n\n`;
+                            messageText += `*Từ:* ${msg.from?.address || 'Không xác định'}\n`;
+                            messageText += `*Đến:* ${msg.to?.[0]?.address || userData.tempMail.email}\n`;
+                            messageText += `*Chủ đề:* ${msg.subject || 'Không có chủ đề'}\n`;
+                            messageText += `*Ngày:* ${new Date(msg.createdAt).toLocaleString()}\n\n`;
+
+                            let content = msg.text || msg.html || 'Không có nội dung';
                             if (msg.html) {
                                 content = content
                                     .replace(/<[^>]*>/g, '')
@@ -1090,20 +1083,20 @@ const handleCheckCommand = async (ctx) => {
                                     .replace(/&quot;/g, '"')
                                     .replace(/&#39;/g, "'");
                             }
-                            
+
                             if (content.length > 1000) {
-                                content = content.substring(0, 1000) + '...\n(contenido truncado)';
+                                content = content.substring(0, 1000) + '...\n(nội dung bị cắt)';
                             }
-                            
-                            messageText += `*Contenido:*\n${content}\n`;
-                            
-                            await ctx.reply(messageText, { 
+
+                            messageText += `*Nội dung:*\n${content}\n`;
+
+                            await ctx.reply(messageText, {
                                 parse_mode: 'Markdown',
-                                disable_web_page_preview: true 
+                                disable_web_page_preview: true
                             });
                         } catch (msgError) {
                             console.error('Error al procesar mensaje individual:', msgError);
-                            await ctx.reply('❌ Error al procesar un mensaje. Continuando con los demás...');
+                            await ctx.reply('❌ Lỗi khi xử lý tin nhắn. Đang tiếp tục...');
                         }
                     }
                 } catch (renewError) {
@@ -1112,7 +1105,7 @@ const handleCheckCommand = async (ctx) => {
                         ctx.chat.id,
                         waitMsg.message_id,
                         null,
-                        '❌ Tu sesión de correo ha expirado. Por favor, genera un nuevo correo con \`.mail\`'
+                        '❌ Phiên email của bạn đã hết hạn. Vui lòng tạo email mới bằng \`.mail\`'
                     );
                 }
             } else {
@@ -1120,13 +1113,13 @@ const handleCheckCommand = async (ctx) => {
                     ctx.chat.id,
                     waitMsg.message_id,
                     null,
-                    `❌ Error al verificar mensajes: ${error.message}\nPor favor, intenta de nuevo.`
+                    `❌ Lỗi khi kiểm tra tin nhắn: ${error.message}\nVui lòng thử lại.`
                 );
             }
         }
     } catch (error) {
         console.error('Error general en comando check:', error);
-        await ctx.reply('❌ Error al verificar mensajes. Por favor, intenta de nuevo.');
+        await ctx.reply('❌ Lỗi khi kiểm tra tin nhắn. Vui lòng thử lại.');
     }
 };
 
@@ -1139,7 +1132,7 @@ const handleIPCommand = async (ctx) => {
     try {
         const ip = getCommandArgs(ctx);
         if (!ip) {
-            await ctx.reply('❌ Uso: /ip o .ip <dirección IP>\nEjemplo: /ip 8.8.8.8');
+            await ctx.reply('❌ Cách dùng: /ip hoặc .ip <địa chỉ IP>\nVí dụ: /ip 8.8.8.8');
             return;
         }
 
@@ -1147,31 +1140,31 @@ const handleIPCommand = async (ctx) => {
         const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
         const ipv6Regex = /^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$/;
         if (!ipv4Regex.test(ip) && !ipv6Regex.test(ip)) {
-            await ctx.reply('❌ Formato de IP inválido. Debe ser una dirección IPv4 o IPv6 válida.');
+            await ctx.reply('❌ Định dạng IP không hợp lệ. Phải là địa chỉ IPv4 hoặc IPv6 hợp lệ.');
             return;
         }
 
         // Enviar mensaje de espera
-        const waitMsg = await ctx.reply('⏳ Verificando IP...');
+        const waitMsg = await ctx.reply('⏳ Đang kiểm tra IP...');
 
         try {
             const ipInfo = await checkIP(ip);
 
             // Crear mensaje con la información
-            let message = `🔍 *Información de IP: ${ip}*\n\n`;
-            message += `*Información Básica:*\n`;
-            message += `• País: ${ipInfo.country}\n`;
-            message += `• Ciudad: ${ipInfo.city}\n`;
+            let message = `🔍 *Thông tin IP: ${ip}*\n\n`;
+            message += `*Thông tin Cơ bản:*\n`;
+            message += `• Quốc gia: ${ipInfo.country}\n`;
+            message += `• Thành phố: ${ipInfo.city}\n`;
             message += `• ISP: ${ipInfo.isp}\n\n`;
-            message += `*Verificación de Seguridad:*\n`;
-            message += `• Proxy/VPN: ${ipInfo.proxy ? '✅ Sí' : '❌ No'}\n`;
-            message += `• Tor: ${ipInfo.tor ? '✅ Sí' : '❌ No'}\n`;
-            message += `• Hosting: ${ipInfo.hosting ? '✅ Sí' : '❌ No'}\n`;
-            message += `• Nivel de Riesgo: ${ipInfo.riskLevel}\n\n`;
-            message += `*Información Adicional:*\n`;
+            message += `*Kiểm tra Bảo mật:*\n`;
+            message += `• Proxy/VPN: ${ipInfo.proxy ? '✅ Có' : '❌ Không'}\n`;
+            message += `• Tor: ${ipInfo.tor ? '✅ Có' : '❌ Không'}\n`;
+            message += `• Hosting: ${ipInfo.hosting ? '✅ Có' : '❌ Không'}\n`;
+            message += `• Mức độ Rủi ro: ${ipInfo.riskLevel}\n\n`;
+            message += `*Thông tin Bổ sung:*\n`;
             message += `• ASN: ${ipInfo.asn}\n`;
-            message += `• Organización: ${ipInfo.organization}\n`;
-            message += `• Zona Horaria: ${ipInfo.timezone}`;
+            message += `• Tổ chức: ${ipInfo.organization}\n`;
+            message += `• Múi giờ: ${ipInfo.timezone}`;
 
             // Guardar en historial
             const userId = ctx.from.id;
@@ -1198,12 +1191,12 @@ const handleIPCommand = async (ctx) => {
                 ctx.chat.id,
                 waitMsg.message_id,
                 null,
-                `❌ Error al verificar IP: ${error.message}`
+                `❌ Lỗi khi kiểm tra IP: ${error.message}`
             );
         }
     } catch (error) {
         console.error('Error general en comando IP:', error);
-        await ctx.reply('❌ Error al procesar el comando. Por favor, intenta de nuevo.');
+        await ctx.reply('❌ Lỗi khi xử lý lệnh. Vui lòng thử lại.');
     }
 };
 
@@ -1212,23 +1205,23 @@ registerCommand('ip', handleIPCommand);
 
 // Actualizar el mensaje de ayuda
 const helpMessage = `🤖 *CardGen Pro Bot*\n\n` +
-    `*Comandos disponibles:*\n` +
-    `• \`/start\` o \`.start\` - Mostrar ayuda y comandos disponibles\n` +
-    `• \`/gen\` o \`.gen\` - Generar tarjetas\n` +
-    `• \`/bin\` o \`.bin\` - Consultar información de BIN\n` +
-    `• \`/cedula\` o \`.cedula\` - Consulta información SRI por cédula\n` +
-    `• \`/placa\` o \`.placa\` - Consulta información Vehicular\n` +
-    `• \`/mail\` o \`.mail\` - Generar correo temporal\n` +
-    `• \`/check\` o \`.check\` - Verificar mensajes del correo\n` +
-    `• \`/ip\` o \`.ip\` - Verificar IP y riesgo de fraude\n` +
-    `• \`/favoritos\` o \`.favoritos\` - Ver BINs favoritos\n` +
-    `• \`/agregarbin\` o \`.agregarbin\` - Guardar BIN en favoritos\n` +
-    `• \`/eliminarbin\` o \`.eliminarbin\` - Eliminar BIN de favoritos\n` +
-    `• \`/historial\` o \`.historial\` - Ver historial de consultas\n` +
-    `• \`/clear\` o \`.clear\` - Limpiar el chat\n` +
-    `• \`/limpiar\` o \`.limpiar\` - Limpiar el chat\n` +
-    `• \`/ayuda\` o \`.ayuda\` - Mostrar ayuda\n\n` +
-    `*Ejemplos:*\n` +
+    `*Lệnh khả dụng:*\n` +
+    `• \`/start\` hoặc \`.start\` - Hiển thị trợ giúp và lệnh\n` +
+    `• \`/gen\` hoặc \`.gen\` - Tạo thẻ\n` +
+    `• \`/bin\` hoặc \`.bin\` - Tra cứu thông tin BIN\n` +
+    `• \`/cedula\` hoặc \`.cedula\` - Tra cứu thông tin CCCD\n` +
+    `• \`/placa\` hoặc \`.placa\` - Tra cứu thông tin Xe\n` +
+    `• \`/mail\` hoặc \`.mail\` - Tạo email ảo\n` +
+    `• \`/check\` hoặc \`.check\` - Kiểm tra tin nhắn\n` +
+    `• \`/ip\` hoặc \`.ip\` - Kiểm tra IP và rủi ro\n` +
+    `• \`/favoritos\` hoặc \`.favoritos\` - Xem BIN yêu thích\n` +
+    `• \`/agregarbin\` hoặc \`.agregarbin\` - Lưu BIN vào yêu thích\n` +
+    `• \`/eliminarbin\` hoặc \`.eliminarbin\` - Xóa BIN khỏi yêu thích\n` +
+    `• \`/historial\` hoặc \`.historial\` - Xem lịch sử tra cứu\n` +
+    `• \`/clear\` hoặc \`.clear\` - Xóa chat\n` +
+    `• \`/limpiar\` hoặc \`.limpiar\` - Xóa chat\n` +
+    `• \`/ayuda\` hoặc \`.ayuda\` - Hiển thị trợ giúp\n\n` +
+    `*Ví dụ:*\n` +
     `• \`.gen 477349002646|05|2027|123\`\n` +
     `• \`.bin 477349\`\n` +
     `• \`.cedula 17xxxxxxxx\`\n` +
@@ -1244,7 +1237,7 @@ const startBot = async () => {
     try {
         await bot.launch();
         console.log('Bot iniciado');
-        
+
         // Signal ready to PM2
         if (process.send) {
             process.send('ready');
@@ -1259,7 +1252,7 @@ const startBot = async () => {
 bot.catch((err, ctx) => {
     console.error('Error en el manejo del comando:', err);
     if (ctx && !isShuttingDown) {
-        ctx.reply('❌ Ocurrió un error al procesar el comando. Por favor, intenta nuevamente.');
+        ctx.reply('❌ Đã xảy ra lỗi khi xử lý lệnh. Vui lòng thử lại.');
     }
 });
 
@@ -1267,16 +1260,16 @@ bot.catch((err, ctx) => {
 const shutdown = async (signal) => {
     if (isShuttingDown) return;
     isShuttingDown = true;
-    
+
     console.log(`Recibida señal ${signal}. Iniciando apagado gracioso...`);
-    
+
     try {
         await bot.stop(signal);
         console.log('Bot detenido correctamente');
     } catch (err) {
         console.error('Error al detener el bot:', err);
     }
-    
+
     process.exit(0);
 };
 

@@ -46,12 +46,12 @@ const luhnCheck = (num) => {
 const generateValidCardNumber = (bin) => {
     const length = 16;
     let cardNumber = bin;
-    
+
     // Completar con números aleatorios hasta length-1
     while (cardNumber.length < length - 1) {
         cardNumber = cardNumber + randomNum(0, 9);
     }
-    
+
     // Encontrar el último dígito que hace válido el número
     for (let i = 0; i <= 9; i++) {
         const fullNumber = cardNumber + i;
@@ -59,7 +59,7 @@ const generateValidCardNumber = (bin) => {
             return fullNumber;
         }
     }
-    
+
     return cardNumber + '0'; // Fallback
 };
 
@@ -184,7 +184,7 @@ export const checkTempMail = async (token) => {
         }
 
         const messagesData = await messagesResponse.json();
-        
+
         if (!messagesData['hydra:member']) {
             return []; // No hay mensajes
         }
@@ -198,11 +198,11 @@ export const checkTempMail = async (token) => {
                             'Authorization': `Bearer ${token}`
                         }
                     });
-                    
+
                     if (!messageResponse.ok) {
                         return msg; // Si falla, retornamos el mensaje básico
                     }
-                    
+
                     return messageResponse.json();
                 } catch (error) {
                     console.error(`Error al obtener mensaje individual:`, error);
@@ -240,17 +240,17 @@ export const checkIP = async (ip) => {
         if (data.tor) riskScore += 3;
         if (data.hosting) riskScore += 1;
 
-        const riskLevel = riskScore >= 3 ? 'Alto' : 
-                         riskScore >= 1 ? 'Medio' : 'Bajo';
+        const riskLevel = riskScore >= 3 ? 'Alto' :
+            riskScore >= 1 ? 'Medio' : 'Bajo';
 
         return {
             ip: ip,
-            country: data.country || 'Desconocido',
-            city: data.city || 'Desconocido',
-            isp: data.connection?.isp || 'Desconocido',
-            asn: data.connection?.asn || 'Desconocido',
-            organization: data.connection?.org || 'Desconocido',
-            timezone: data.timezone?.id || 'Desconocido',
+            country: data.country || 'Không xác định',
+            city: data.city || 'Không xác định',
+            isp: data.connection?.isp || 'Không xác định',
+            asn: data.connection?.asn || 'Không xác định',
+            organization: data.connection?.org || 'Không xác định',
+            timezone: data.timezone?.id || 'Không xác định',
             proxy: data.proxy || false,
             tor: data.tor || false,
             hosting: data.hosting || false,
@@ -260,4 +260,142 @@ export const checkIP = async (ip) => {
         console.error('Error al consultar IP:', error);
         throw error;
     }
-}; 
+};
+
+// --- Manejo de base de datos local de BINs (CSV) ---
+import fs from 'fs';
+import { parse } from 'csv-parse';
+import path from 'path';
+
+let binDatabase = new Map();
+let isDatabaseLoaded = false;
+
+// Función para cargar la base de datos CSV en memoria
+export const loadBinDatabase = async (filePath) => {
+    console.log(`Cargando base de datos de BINs desde ${filePath}...`);
+    try {
+        if (!fs.existsSync(filePath)) {
+            console.error('Archivo de base de datos BIN no encontrado en:', filePath);
+            return false;
+        }
+
+        const parser = fs.createReadStream(filePath).pipe(parse({
+            columns: true,
+            skip_empty_lines: true
+        }));
+
+        let count = 0;
+        for await (const record of parser) {
+            // Asumiendo que el campo BIN está en la primera columna o se llama "BIN"
+            const bin = record.BIN || record.Bin || record.bin;
+            if (bin) {
+                // Guardar solo los datos necesarios para ahorrar memoria
+                binDatabase.set(bin.toString(), {
+                    bank: record.Issuer || record.Bank || 'Không xác định',
+                    brand: record.Brand || record.Scheme || 'Không xác định',
+                    type: record.Type || 'Không xác định',
+                    level: record.Category || record.Level || 'Không xác định',
+                    country: record.CountryName || record.Country || 'Không xác định',
+                    countryCode: record.isoCode2 || record.CountryCode || '??'
+                });
+                count++;
+            }
+        }
+
+        isDatabaseLoaded = true;
+        console.log(`Base de datos de BINs cargada exitosamente: ${count} registros.`);
+        return true;
+    } catch (error) {
+        console.error('Error al cargar la base de datos de BINs:', error);
+        return false;
+    }
+};
+
+// Función para buscar BIN localmente
+export const lookupBinLocal = (bin) => {
+    if (!isDatabaseLoaded) return null;
+
+    // Intentar buscar coincidencias exactas y parciales (6 dígitos es el estándar, pero el CSV puede tener más)
+    // Primero, buscar coincidencia exacta
+    let info = binDatabase.get(bin);
+
+    // Si no encuentra y el bin es largo, intentar cortar a 6 dígitos (o 8)
+    if (!info && bin.length > 6) {
+        info = binDatabase.get(bin.slice(0, 8));
+        if (!info) {
+            info = binDatabase.get(bin.slice(0, 6));
+        }
+    }
+
+    if (info) {
+        console.log(`BIN ${bin} encontrado en base de datos local.`);
+        return info;
+    }
+
+    return null;
+};
+
+// Función para obtener información completa del BIN (Local + APIs)
+export const getBinInfo = async (bin) => {
+    try {
+        // 1. Intentar búsqueda local primero
+        const localInfo = lookupBinLocal(bin);
+        if (localInfo) {
+            console.log(`BIN ${bin} encontrado en local.`);
+            return localInfo;
+        }
+
+        console.log(`BIN ${bin} no encontrado localmente. Consultando en binlist.net...`);
+        // Primera API: binlist.net
+        const controller1 = new AbortController();
+        const timeout1 = setTimeout(() => controller1.abort(), 3000); // 3 seconds timeout
+
+        try {
+            const response1 = await fetch(`https://lookup.binlist.net/${bin}`, { signal: controller1.signal });
+            clearTimeout(timeout1);
+            if (response1.ok) {
+                const data1 = await response1.json();
+                return {
+                    bank: data1.bank?.name || 'Không xác định',
+                    brand: data1.scheme || 'Không xác định',
+                    type: data1.type || 'Không xác định',
+                    country: data1.country?.name || 'Không xác định',
+                    countryCode: data1.country?.alpha2 || '??',
+                    level: data1.brand || 'Không xác định'
+                };
+            }
+        } catch (e) { clearTimeout(timeout1); }
+
+        console.log(`Consultando BIN ${bin} en bintable.com...`);
+        // Segunda API: bintable.com
+        const controller2 = new AbortController();
+        const timeout2 = setTimeout(() => controller2.abort(), 3000); // 3 seconds timeout
+
+        try {
+            const response2 = await fetch(`https://api.bintable.com/v1/${bin}?api_key=19d935a6d3244f3f8bab8f09157e4936`, { signal: controller2.signal });
+            clearTimeout(timeout2);
+            if (response2.ok) {
+                const data2 = await response2.json();
+                return {
+                    bank: data2.bank?.name || 'Không xác định',
+                    brand: data2.scheme || data2.brand || 'Không xác định',
+                    type: data2.type || 'Không xác định',
+                    country: data2.country?.name || 'Không xác định',
+                    countryCode: data2.country?.code || '??',
+                    level: data2.level || 'Không xác định'
+                };
+            }
+        } catch (e) { clearTimeout(timeout2); }
+
+        return {};
+
+        return {};
+    } catch (error) {
+        console.error('Error al consultar BIN:', error);
+        return {};
+    }
+};
+
+export const generateRandomBalance = () => {
+    return (Math.random() * 100).toFixed(2);
+};

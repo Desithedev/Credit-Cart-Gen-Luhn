@@ -1,9 +1,10 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="CardGen Pro - Generador avanzado de tarjetas con validación Luhn">
+    <meta name="description" content="CardGen Pro - Trình tạo thẻ nâng cao với xác thực Luhn">
     <meta name="theme-color" content="#7c3aed">
     <title>CardGen Pro</title>
     <link rel="icon" type="image/svg+xml" href="./src/assets/favicon.svg">
@@ -12,40 +13,40 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         /* Estilos específicos para mejorar la responsividad del header en index.html */
-        
+
         /* Header responsive mejorado */
         @media (max-width: 1024px) {
             .header-content {
                 padding: 0.5rem 1.5rem;
             }
-            
+
             .header-right {
                 gap: 0.5rem;
             }
-            
+
             .nav-button {
                 padding: 0.5rem 0.75rem;
                 font-size: 0.875rem;
             }
-            
+
             .nav-button span {
                 display: none;
             }
-            
+
             .nav-button i {
                 font-size: 1rem;
             }
         }
-        
+
         @media (max-width: 768px) {
             .header-content {
                 padding: 0.5rem 1rem;
             }
-            
+
             .header-right {
                 gap: 0.25rem;
             }
-            
+
             .nav-button {
                 padding: 0.5rem;
                 min-width: 40px;
@@ -54,15 +55,15 @@
                 align-items: center;
                 justify-content: center;
             }
-            
+
             .nav-button span {
                 display: none;
             }
-            
+
             .nav-button i {
                 font-size: 0.875rem;
             }
-            
+
             .telegram-link,
             .github-link {
                 padding: 0.5rem;
@@ -72,160 +73,160 @@
                 align-items: center;
                 justify-content: center;
             }
-            
+
             .telegram-link i,
             .github-link i {
                 font-size: 0.875rem;
             }
-            
+
             .favorite-header-button {
                 padding: 0.5rem;
                 min-width: 40px;
                 height: 40px;
             }
         }
-        
+
         @media (max-width: 640px) {
             .header-content {
                 padding: 0.5rem 0.75rem;
             }
-            
+
             .logo {
                 font-size: 1.25rem;
             }
-            
+
             .logo img {
                 height: 32px;
                 width: 32px;
             }
-            
+
             .header-right {
                 gap: 0.125rem;
             }
-            
+
             .nav-button {
                 padding: 0.375rem;
                 min-width: 36px;
                 height: 36px;
             }
-            
+
             .nav-button i {
                 font-size: 0.8125rem;
             }
-            
+
             .telegram-link,
             .github-link {
                 padding: 0.375rem;
                 min-width: 36px;
                 height: 36px;
             }
-            
+
             .telegram-link i,
             .github-link i {
                 font-size: 0.8125rem;
             }
-            
+
             .favorite-header-button {
                 padding: 0.375rem;
                 min-width: 36px;
                 height: 36px;
             }
         }
-        
+
         @media (max-width: 480px) {
             .header-content {
                 padding: 0.5rem 0.5rem;
             }
-            
+
             .logo {
                 font-size: 1.125rem;
             }
-            
+
             .logo img {
                 height: 28px;
                 width: 28px;
             }
-            
+
             .header-right {
                 gap: 0.125rem;
             }
-            
+
             .nav-button {
                 padding: 0.25rem;
                 min-width: 32px;
                 height: 32px;
             }
-            
+
             .nav-button i {
                 font-size: 0.75rem;
             }
-            
+
             .telegram-link,
             .github-link {
                 padding: 0.25rem;
                 min-width: 32px;
                 height: 32px;
             }
-            
+
             .telegram-link i,
             .github-link i {
                 font-size: 0.75rem;
             }
-            
+
             .favorite-header-button {
                 padding: 0.25rem;
                 min-width: 32px;
                 height: 32px;
             }
         }
-        
+
         @media (max-width: 360px) {
             .header-content {
                 padding: 0.5rem 0.25rem;
             }
-            
+
             .logo {
                 font-size: 1rem;
             }
-            
+
             .logo img {
                 height: 24px;
                 width: 24px;
             }
-            
+
             .header-right {
                 gap: 0.125rem;
             }
-            
+
             .nav-button {
                 padding: 0.25rem;
                 min-width: 28px;
                 height: 28px;
             }
-            
+
             .nav-button i {
                 font-size: 0.6875rem;
             }
-            
+
             .telegram-link,
             .github-link {
                 padding: 0.25rem;
                 min-width: 28px;
                 height: 28px;
             }
-            
+
             .telegram-link i,
             .github-link i {
                 font-size: 0.6875rem;
             }
-            
+
             .favorite-header-button {
                 padding: 0.25rem;
                 min-width: 28px;
                 height: 28px;
             }
         }
-        
+
         /* Mejoras para el logo */
         .logo {
             display: flex;
@@ -237,40 +238,41 @@
             font-weight: 600;
             height: 100%;
         }
-        
+
         .logo img {
             height: 40px;
             width: auto;
             transition: all 0.3s ease;
         }
-        
+
         .logo span {
             color: var(--text-primary);
             transition: all 0.3s ease;
         }
-        
+
         /* Mejoras para los botones de navegación */
         .nav-button {
             transition: all 0.3s ease;
             border-radius: var(--radius-md);
         }
-        
+
         .nav-button:hover {
             transform: translateY(-1px);
         }
-        
+
         .telegram-link,
         .github-link {
             transition: all 0.3s ease;
             border-radius: var(--radius-md);
         }
-        
+
         .telegram-link:hover,
         .github-link:hover {
             transform: translateY(-1px);
         }
     </style>
 </head>
+
 <body class="dark-theme">
     <div class="background-animation">
         <div class="gradient-sphere"></div>
@@ -289,28 +291,30 @@
             <nav class="header-right">
                 <a href="bin-lookup.html" class="nav-button bin-lookup-button" title="Consultar BIN">
                     <i class="fas fa-search" aria-hidden="true"></i>
-                    <span>Consultar BIN</span>
+                    <span>Tra cứu BIN</span>
                 </a>
                 <a href="sri-lookup.html" class="nav-button sri-lookup-button" title="Consultar SRI">
                     <i class="fas fa-id-card" aria-hidden="true"></i>
-                    <span>Consultar SRI</span>
+                    <span>Tra cứu SRI</span>
                 </a>
                 <a href="temp-mail.html" class="nav-button temp-mail-button" title="Correo Temporal">
                     <i class="fas fa-envelope-open-text" aria-hidden="true"></i>
-                    <span>Temp Mail</span>
+                    <span>Email Ảo</span>
                 </a>
                 <a href="ip-check.html" class="nav-button ip-check-button" title="IP Check">
                     <i class="fas fa-globe" aria-hidden="true"></i>
-                    <span>IP Check</span>
+                    <span>Kiểm tra IP</span>
                 </a>
-                <button id="open-favorites" class="nav-button favorite-header-button" title="Ver favoritos">
+                <button id="open-favorites" class="nav-button favorite-header-button" title="Xem yêu thích">
                     <i class="fas fa-star"></i>
                 </button>
-                <a href="https://t.me/CardGen_Pro_BOT" class="telegram-link" target="_blank" rel="noopener noreferrer" title="Telegram Bot">
+                <a href="https://t.me/CardGen_Pro_BOT" class="telegram-link" target="_blank" rel="noopener noreferrer"
+                    title="Telegram Bot">
                     <i class="fab fa-telegram" aria-hidden="true"></i>
                     <span class="sr-only">Telegram</span>
                 </a>
-                <a href="https://github.com/mat1520" class="github-link" target="_blank" rel="noopener noreferrer" title="GitHub">
+                <a href="https://github.com/mat1520" class="github-link" target="_blank" rel="noopener noreferrer"
+                    title="GitHub">
                     <i class="fab fa-github" aria-hidden="true"></i>
                     <span class="sr-only">GitHub</span>
                 </a>
@@ -325,7 +329,7 @@
                     <div class="form-group">
                         <label for="bin">BIN</label>
                         <div class="bin-input-container">
-                            <input type="text" id="bin" placeholder="Ingresa los dígitos (1-16)" maxlength="16" required>
+                            <input type="text" id="bin" placeholder="Nhập các chữ số (1-16)" maxlength="16" required>
                         </div>
                     </div>
 
@@ -341,7 +345,7 @@
                     <div class="form-group">
                         <label for="month">MONTH</label>
                         <select id="month" required>
-                            <option value="random">Random</option>
+                            <option value="random">Ngẫu nhiên</option>
                             <option value="01">01</option>
                             <option value="02">02</option>
                             <option value="03">03</option>
@@ -360,7 +364,7 @@
                     <div class="form-group">
                         <label for="year">YEAR</label>
                         <select id="year" required>
-                            <option value="random">Random</option>
+                            <option value="random">Ngẫu nhiên</option>
                             <option value="2025">2025</option>
                             <option value="2026">2026</option>
                             <option value="2027">2027</option>
@@ -393,7 +397,7 @@
                     <div class="form-group">
                         <button type="submit" class="generate-button">
                             <i class="fas fa-cog"></i>
-                            Generate
+                            Tạo Ngay
                         </button>
                     </div>
                 </div>
@@ -401,8 +405,10 @@
 
             <div class="favorites-section">
                 <div class="favorites-header">
-                    <h3><i class="fas fa-star"></i> BINs Favoritos
-                        <button id="toggle-favorites-visibility" class="favorites-visibility-btn" title="Mostrar/Ocultar favoritos" style="background:none;border:none;outline:none;cursor:pointer;margin-left:8px;vertical-align:middle;">
+                    <h3><i class="fas fa-star"></i> BIN Yêu thích
+                        <button id="toggle-favorites-visibility" class="favorites-visibility-btn"
+                            title="Hiện/Ẩn yêu thích"
+                            style="background:none;border:none;outline:none;cursor:pointer;margin-left:8px;vertical-align:middle;">
                             <i id="favorites-visibility-icon" class="fas fa-eye"></i>
                         </button>
                     </h3>
@@ -414,7 +420,7 @@
 
             <div class="results-section">
                 <div class="results-header">
-                    <h3><i class="fas fa-list"></i> Resultados</h3>
+                    <h3><i class="fas fa-list"></i> Kết quả</h3>
                     <div class="results-actions">
                         <div class="export-dropdown">
                             <select id="export-format" class="format-select">
@@ -426,20 +432,20 @@
                             </select>
                             <button id="export-button" class="export-button">
                                 <i class="fas fa-download"></i>
-                                Exportar
+                                Xuất
                             </button>
                         </div>
-                        <button class="action-button copy-button" title="Copiar al portapapeles">
+                        <button class="action-button copy-button" title="Sao chép vào khay nhớ tạm">
                             <i class="fas fa-copy"></i>
-                            Copiar
+                            Sao chép
                         </button>
-                        <button class="action-button reset-button" title="Limpiar resultados">
+                        <button class="action-button reset-button" title="Xóa kết quả">
                             <i class="fas fa-trash"></i>
-                            Limpiar
+                            Xóa
                         </button>
                     </div>
                 </div>
-                <textarea id="results" readonly placeholder="Los resultados se mostrarán aquí..."></textarea>
+                <textarea id="results" readonly placeholder="Kết quả sẽ hiển thị ở đây..."></textarea>
             </div>
         </div>
     </main>
@@ -449,10 +455,11 @@
             <div class="footer-left">
                 <div class="footer-project-info">
                     <span class="project-name">CardGen Pro</span>
-                    <p class="project-description">Generador avanzado de tarjetas con funcionalidades de BIN lookup y herramientas de validación.</p>
+                    <p class="project-description">Trình tạo thẻ nâng cao với tính năng tra cứu BIN và công cụ xác thực.
+                    </p>
                 </div>
             </div>
-            
+
             <div class="footer-center">
                 <div class="footer-stats">
                     <div class="stat-item">
@@ -475,11 +482,13 @@
                     <i class="fab fa-github" aria-hidden="true"></i>
                     <span>GitHub</span>
                 </a>
-                <a href="https://github.com/mat520/cardgen-pro/issues" class="footer-link" target="_blank" rel="noopener noreferrer">
+                <a href="https://github.com/mat520/cardgen-pro/issues" class="footer-link" target="_blank"
+                    rel="noopener noreferrer">
                     <i class="fas fa-bug" aria-hidden="true"></i>
                     <span>Issues</span>
                 </a>
-                <a href="https://github.com/mat520/cardgen-pro#readme" class="footer-link" target="_blank" rel="noopener noreferrer">
+                <a href="https://github.com/mat520/cardgen-pro#readme" class="footer-link" target="_blank"
+                    rel="noopener noreferrer">
                     <i class="fas fa-book" aria-hidden="true"></i>
                     <span>Docs</span>
                 </a>
@@ -490,7 +499,7 @@
     <div class="modal-overlay" id="favorite-modal">
         <div class="modal">
             <div class="modal-header">
-                <h3><i class="fas fa-star"></i> Agregar a Favoritos</h3>
+                <h3><i class="fas fa-star"></i> Thêm vào Yêu thích</h3>
                 <button class="modal-close" id="close-modal">
                     <i class="fas fa-times"></i>
                 </button>
@@ -501,13 +510,13 @@
                     <input type="text" id="favorite-bin">
                 </div>
                 <div class="form-group">
-                    <label for="favorite-name">Nombre (opcional)</label>
-                    <input type="text" id="favorite-name" maxlength="32" placeholder="Ej: Mi BIN de prueba">
+                    <label for="favorite-name">Tên (tùy chọn)</label>
+                    <input type="text" id="favorite-name" maxlength="32" placeholder="Vd: BIN thử nghiệm của tôi">
                 </div>
                 <div class="form-group">
-                    <label for="favorite-month">Mes (opcional)</label>
+                    <label for="favorite-month">Tháng (tùy chọn)</label>
                     <select id="favorite-month">
-                        <option value="">Seleccionar mes</option>
+                        <option value="">Chọn tháng</option>
                         <option value="01">01</option>
                         <option value="02">02</option>
                         <option value="03">03</option>
@@ -523,9 +532,9 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <label for="favorite-year">Año (opcional)</label>
+                    <label for="favorite-year">Năm (tùy chọn)</label>
                     <select id="favorite-year">
-                        <option value="">Seleccionar año</option>
+                        <option value="">Chọn năm</option>
                         <option value="2025">2025</option>
                         <option value="2026">2026</option>
                         <option value="2027">2027</option>
@@ -540,12 +549,12 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <label for="favorite-cvv">CVV (opcional)</label>
+                    <label for="favorite-cvv">CVV (tùy chọn)</label>
                     <input type="text" id="favorite-cvv" maxlength="3">
                 </div>
                 <div class="modal-actions">
-                    <button type="button" class="modal-cancel">Cancelar</button>
-                    <button type="submit" class="modal-save">Guardar</button>
+                    <button type="button" class="modal-cancel">Hủy</button>
+                    <button type="submit" class="modal-save">Lưu</button>
                 </div>
             </form>
         </div>
@@ -559,4 +568,5 @@
         });
     </script>
 </body>
-</html> 
+
+</html>
