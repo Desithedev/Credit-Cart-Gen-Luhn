@@ -33,23 +33,23 @@ const MAX_REQUESTS = 30; // 30 requests per minute
 const rateLimiter = (ctx, next) => {
     const userId = ctx.from.id;
     const now = Date.now();
-    
+
     if (!rateLimits.has(userId)) {
         rateLimits.set(userId, []);
     }
-    
+
     const userRequests = rateLimits.get(userId);
     const windowStart = now - RATE_LIMIT_WINDOW;
-    
+
     // Remove old requests
     while (userRequests.length && userRequests[0] < windowStart) {
         userRequests.shift();
     }
-    
+
     if (userRequests.length >= MAX_REQUESTS) {
         return ctx.reply('⚠️ Rate limit exceeded. Please wait a minute before making more requests.');
     }
-    
+
     userRequests.push(now);
     return next();
 };
@@ -100,13 +100,13 @@ const lookupBin = async (bin) => {
                 'apikey': API_KEY
             }
         });
-        
+
         console.log('Status de la respuesta:', response.status);
         console.log('Datos recibidos:', JSON.stringify(response.data, null, 2));
-        
+
         // Guardar en caché
         await cache.set(bin, response.data);
-        
+
         return response.data;
     } catch (error) {
         console.error('Error detallado en lookupBin:', error.response?.data || error.message);
@@ -181,7 +181,7 @@ bot.command('gen', async (ctx) => {
     try {
         // Parsear el input con el formato BIN|mes|año|
         let [bin, month, year] = input.split('|');
-        
+
         // Limpiar espacios en blanco y validar
         bin = bin ? bin.trim() : '';
         month = month ? month.trim() : '';
@@ -210,10 +210,10 @@ bot.command('gen', async (ctx) => {
                 cvv: card.cvv
             };
         });
-        
+
         // Formatear la respuesta con el formato solicitado
         const header = `•𝘽𝙞𝙣 -» ${bin}|${month || 'xx'}|${year || 'xx'}|rnd\n─━─━─━─━─━─━─━─━─━─━─━─━─`;
-        const cardsList = cards.map(card => 
+        const cardsList = cards.map(card =>
             `${card.number}|${card.month}|${card.year}|${card.cvv}`
         ).join('\n');
         const footer = `─━─━─━─━─━─━─━─━─━─━─━─━─\n*DATOS DEL BIN*\n─━─━─━─━─━─━─━─━─━─━─━─━─\n•  *USUARIO*: ${ctx.from.first_name || 'Usuario'}`;
@@ -254,7 +254,7 @@ bot.command('bin', async (ctx) => {
         }
 
         const msg = await ctx.reply('🔍 Buscando información del BIN...');
-        
+
         try {
             const data = await lookupBin(bin);
             console.log('Datos procesados:', data);
@@ -315,12 +315,12 @@ const getCountryEmoji = (countryCode) => {
 bot.command('favoritos', (ctx) => {
     const userId = ctx.from.id;
     const userData = loadUserData(userId);
-    
+
     if (userData.favorites.length === 0) {
         return ctx.reply('📌 No tienes BINs favoritos guardados');
     }
 
-    const response = userData.favorites.map((fav, index) => 
+    const response = userData.favorites.map((fav, index) =>
         `${index + 1}. ${fav.bin} (${fav.month || 'MM'}/${fav.year || 'YY'})`
     ).join('\n');
 
@@ -340,7 +340,7 @@ bot.command('agregarbin', (ctx) => {
 
     const userId = ctx.from.id;
     const userData = loadUserData(userId);
-    
+
     // Verificar si el BIN ya existe
     if (userData.favorites.some(fav => fav.bin === bin)) {
         return ctx.reply('❌ Este BIN ya está en tus favoritos');
@@ -360,7 +360,7 @@ bot.command('eliminarbin', (ctx) => {
 
     const userId = ctx.from.id;
     const userData = loadUserData(userId);
-    
+
     const index = parseInt(args[0]) - 1;
     if (isNaN(index) || index < 0 || index >= userData.favorites.length) {
         return ctx.reply('❌ Índice inválido');
@@ -375,7 +375,7 @@ bot.command('eliminarbin', (ctx) => {
 bot.command('historial', (ctx) => {
     const userId = ctx.from.id;
     const userData = loadUserData(userId);
-    
+
     if (userData.history.length === 0) {
         return ctx.reply('📝 No hay historial de consultas');
     }

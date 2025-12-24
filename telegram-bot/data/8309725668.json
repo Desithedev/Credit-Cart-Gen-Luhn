@@ -1,0 +1,144 @@
+{
+  "favorites": [],
+  "history": [
+    {
+      "type": "gen",
+      "bin": "51546200208",
+      "count": 10,
+      "timestamp": "2025-12-23T14:17:19.931Z"
+    },
+    {
+      "type": "gen",
+      "bin": "5425430",
+      "count": 10,
+      "timestamp": "2025-12-23T13:49:13.877Z"
+    },
+    {
+      "type": "gen",
+      "bin": "5425430",
+      "count": 10,
+      "timestamp": "2025-12-23T13:48:56.606Z"
+    },
+    {
+      "type": "gen",
+      "bin": "551827706113",
+      "count": 10,
+      "timestamp": "2025-12-23T13:30:01.016Z"
+    },
+    {
+      "type": "gen",
+      "bin": "6258142602",
+      "count": 10,
+      "timestamp": "2025-12-22T04:38:08.472Z"
+    },
+    {
+      "type": "ip_check",
+      "ip": "14.243.33.226",
+      "info": {
+        "ip": "14.243.33.226",
+        "country": "Vietnam",
+        "city": "Hanoi",
+        "isp": "Vnpt Corp",
+        "asn": 45899,
+        "organization": "Vietnam Posts And Telecommunications Group",
+        "timezone": "Asia/Saigon",
+        "proxy": false,
+        "tor": false,
+        "hosting": false,
+        "riskLevel": "Bajo"
+      },
+      "timestamp": "2025-12-22T03:47:15.685Z"
+    },
+    {
+      "type": "gen",
+      "bin": "460075000071",
+      "count": 10,
+      "timestamp": "2025-12-22T03:28:54.681Z"
+    },
+    {
+      "type": "gen",
+      "bin": "460075000071",
+      "count": 10,
+      "timestamp": "2025-12-22T03:28:28.631Z"
+    },
+    {
+      "type": "gen",
+      "bin": "460075000071",
+      "count": 10,
+      "timestamp": "2025-12-22T03:27:29.980Z"
+    },
+    {
+      "type": "gen",
+      "bin": "460075000072",
+      "count": 10,
+      "timestamp": "2025-12-22T03:25:37.971Z"
+    },
+    {
+      "type": "gen",
+      "bin": "657245",
+      "count": 10,
+      "timestamp": "2025-12-20T08:06:31.496Z"
+    },
+    {
+      "type": "gen",
+      "bin": "515462",
+      "count": 10,
+      "timestamp": "2025-12-20T08:05:13.518Z"
+    },
+    {
+      "type": "gen",
+      "bin": "5154620020815518",
+      "count": 10,
+      "timestamp": "2025-12-20T07:55:40.213Z"
+    },
+    {
+      "type": "gen",
+      "bin": "51546200208",
+      "count": 10,
+      "timestamp": "2025-12-20T07:29:31.886Z"
+    },
+    {
+      "type": "gen",
+      "bin": "5425430",
+      "count": 10,
+      "timestamp": "2025-12-20T06:57:42.321Z"
+    },
+    {
+      "type": "lookup",
+      "bin": "515472",
+      "info": {
+        "bank": "SOCIETE MONETIQUE-TUNISIE",
+        "brand": "MASTERCARD",
+        "type": "DEBIT",
+        "level": "STANDARD",
+        "country": "TUNISIA",
+        "countryCode": "TN"
+      },
+      "timestamp": "2025-12-20T06:49:04.560Z"
+    },
+    {
+      "type": "lookup",
+      "bin": "515472",
+      "info": {
+        "bank": "Desconocido",
+        "brand": "Desconocida",
+        "type": "Desconocido",
+        "country": "Desconocido",
+        "countryCode": "??",
+        "level": "Desconocido"
+      },
+      "timestamp": "2025-12-20T06:35:47.863Z"
+    },
+    {
+      "type": "gen",
+      "bin": "515472",
+      "count": 10,
+      "timestamp": "2025-12-20T06:34:20.456Z"
+    }
+  ],
+  "tempMail": {
+    "email": "la1pi62c@airsworld.net",
+    "token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJpYXQiOjE3NjY0OTU4MjUsInJvbGVzIjpbIlJPTEVfVVNFUiJdLCJhZGRyZXNzIjoibGExcGk2MmNAYWlyc3dvcmxkLm5ldCIsImlkIjoiNjk0YTk2NTEzYmM2MzUzM2NiMDgwYWJhIiwibWVyY3VyZSI6eyJzdWJzY3JpYmUiOlsiL2FjY291bnRzLzY5NGE5NjUxM2JjNjM1MzNjYjA4MGFiYSJdfX0.gqQmURyxU1QGBuyPHuF63f_Rw6Wly3n53QaaTYZVPpx2V6LYstgAg0d1ok60e6kHxXOhoyUR9vFPMm42I2z_Sw",
+    "password": "7ccyfh8us3i"
+  }
+}
